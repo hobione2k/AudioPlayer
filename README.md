@@ -4,7 +4,7 @@
 
 ## 使い方
 
-1. `index.html` をブラウザ (Chrome / Edge / Firefox など) で開く
+1. [AudioPlayer](https://hobione2k.github.io/AudioPlayer/)または`index.html` をブラウザ (Chrome / Edge / Firefox など) で開く
 2. オーディオファイル (wav / mp3 / ogg / flac / m4a) を再生リスト領域にドラッグ＆ドロップ、または「ファイルを追加」ボタンで追加
 3. 曲をクリックすると再生
 
