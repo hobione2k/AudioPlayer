@@ -11,13 +11,20 @@
 <body>
   <main class="player">
     <div class="player-header">
-      <h1>Music Player</h1>
-      <!-- テーマ切替トグルボタン (ライト ⇔ ダーク) -->
-      <button id="themeBtn" class="theme-toggle" title="テーマ切替 (T)" aria-pressed="false">☀</button>
+      <h1>Audio Player</h1>
+      <div class="header-actions">
+        <!-- ビジュアライザー表示の ON/OFF 切替ボタン -->
+        <button id="visualizerBtn" class="visualizer-toggle" title="ビジュアライザー表示切替 (V)" aria-pressed="true">📊</button>
+        <!-- テーマ切替トグルボタン (ライト ⇔ ダーク) -->
+        <button id="themeBtn" class="theme-toggle" title="テーマ切替 (T)" aria-pressed="false">☀</button>
+      </div>
     </div>
 
     <!-- 再生中の曲名表示 -->
     <div id="nowPlaying" class="now-playing">曲が選択されていません</div>
+
+    <!-- オーディオビジュアライザー (再生中の音の周波数分布を棒グラフで表示) -->
+    <canvas id="visualizer" class="visualizer" aria-hidden="true"></canvas>
 
     <!-- 再生位置スライダーと再生時間 -->
     <div class="seek">
@@ -40,6 +47,27 @@
       <input id="volumeBar" type="range" min="0" max="200" step="1" value="100">
       <span id="volumeValue" class="volume-value">100%</span>
     </div>
+
+    <!-- リバーブ・再生速度の調整 (クリックで開閉) -->
+    <details id="effects" class="effects">
+      <!-- 閉じていても現在の設定がわかるよう、見出しの横に値を表示する (app.js で更新) -->
+      <summary>リバーブ・速度 <span id="effectsSummary" class="effects-summary"></span></summary>
+
+      <!-- リバーブの強さスライダー (0% = 原音のみ ～ 100% = 響きのみ) -->
+      <div class="reverb">
+        <label for="reverbBar">リバーブ</label>
+        <input id="reverbBar" type="range" min="0" max="100" step="1" value="0">
+        <span id="reverbValue" class="volume-value">0%</span>
+      </div>
+
+      <!-- 再生速度スライダー (0.5～2.0倍。ダブルクリックで等速に戻す) -->
+      <div class="speed">
+        <label for="speedBar">速度</label>
+        <input id="speedBar" type="range" min="0.5" max="2" step="0.05" value="1"
+               title="ダブルクリックで等速 (1.00x) に戻す">
+        <span id="speedValue" class="volume-value">1.00x</span>
+      </div>
+    </details>
 
     <!-- 再生リスト -->
     <section class="playlist-section">
@@ -73,12 +101,21 @@
         <dt><kbd>Home</kbd></dt><dd>曲の先頭へ</dd>
         <dt><kbd>↑</kbd> / <kbd>↓</kbd></dt><dd>音量 +5% / −5%</dd>
         <dt><kbd>M</kbd></dt><dd>ミュート / 解除</dd>
+        <dt><kbd>]</kbd> / <kbd>[</kbd></dt><dd>再生速度 +0.1x / −0.1x</dd>
         <dt><kbd>O</kbd></dt><dd>ファイルを追加</dd>
         <dt><kbd>T</kbd></dt><dd>テーマ切替 (ライト / ダーク)</dd>
+        <dt><kbd>V</kbd></dt><dd>ビジュアライザー表示 ON / OFF</dd>
         <dt><kbd>Delete</kbd></dt><dd>選択中の曲を再生リストから削除</dd>
       </dl>
     </details>
   </main>
+
+  <!-- フッター: リポジトリとライセンスへのリンク -->
+  <footer class="site-footer">
+    <a href="https://github.com/hobione2k/AudioPlayer" target="_blank" rel="noopener noreferrer">Repository</a>
+    <span aria-hidden="true">|</span>
+    <a href="https://github.com/hobione2k/AudioPlayer/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a>
+  </footer>
 
   <!-- 実際の再生を担うaudio要素 -->
   <audio id="audio" preload="metadata"></audio>

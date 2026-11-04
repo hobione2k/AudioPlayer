@@ -24,6 +24,14 @@ const dropZone = document.getElementById('dropZone');
 const playlistEl = document.getElementById('playlist');
 const emptyMessage = document.getElementById('emptyMessage');
 const trackCount = document.getElementById('trackCount');
+const visualizer = document.getElementById('visualizer');
+const visualizerBtn = document.getElementById('visualizerBtn');
+const reverbBar = document.getElementById('reverbBar');
+const reverbValue = document.getElementById('reverbValue');
+const speedBar = document.getElementById('speedBar');
+const speedValue = document.getElementById('speedValue');
+const effectsPanel = document.getElementById('effects');
+const effectsSummary = document.getElementById('effectsSummary');
 
 // ===== 状態 =====
 
@@ -44,8 +52,18 @@ let draggingId = null;
 // AudioContext はユーザー操作後でないと開始できないため、初回再生時に生成する。
 let audioContext = null;
 let gainNode = null;
+// ビジュアライザー用に周波数データを取り出すノード
+let analyserNode = null;
+// リバーブ用: 原音の音量 (dry) と 響きの音量 (wet) を調整する GainNode
+let reverbDryGain = null;
+let reverbWetGain = null;
 
-// AudioContext と GainNode を (まだなければ) 準備する
+// AudioContext と各ノードを (まだなければ) 準備する
+// 音の流れ:
+//   audio要素 ─┬─ dry (原音) ─────────────────┬→ AnalyserNode → GainNode (音量) → 出力
+//              └─ ConvolverNode (響き) → wet ─┘
+// AnalyserNode はリバーブの後ろに置き、実際に聞こえる音を表示する。
+// また音量より前に置くことで、音量を下げてもビジュアライザーの表示は変わらない。
 function ensureAudioGraph() {
   if (audioContext) {
     // 一時停止状態なら再開する
@@ -53,12 +71,180 @@ function ensureAudioGraph() {
     return;
   }
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
-  if (!AudioCtx) return; // 非対応ブラウザでは audio.volume のみで制御 (最大100%)
+  if (!AudioCtx) return; // 非対応ブラウザでは audio.volume のみで制御 (最大100%、ビジュアライザー・リバーブ無効)
   audioContext = new AudioCtx();
   const source = audioContext.createMediaElementSource(audio);
+
+  // リバーブ: 原音の経路と、響きを付ける経路の2本に分ける
+  reverbDryGain = audioContext.createGain();
+  reverbWetGain = audioContext.createGain();
+  const convolver = audioContext.createConvolver();
+  convolver.buffer = createReverbImpulse(audioContext);
+
+  analyserNode = audioContext.createAnalyser();
+  analyserNode.fftSize = 2048;               // 周波数の分解能 (低音域を細かく分けるため大きめにする)
+  analyserNode.smoothingTimeConstant = 0.8;  // 前回値との平滑化 (大きいほど動きが滑らか)
   gainNode = audioContext.createGain();
-  source.connect(gainNode).connect(audioContext.destination);
+
+  // 2本の経路を AnalyserNode で合流させ、音量 → 出力へつなぐ
+  source.connect(reverbDryGain).connect(analyserNode);
+  source.connect(convolver).connect(reverbWetGain).connect(analyserNode);
+  analyserNode.connect(gainNode).connect(audioContext.destination);
+
   applyVolume();
+  applyReverb();
+}
+
+// ===== リバーブ =====
+
+// 響きが消えるまでの長さ (秒)
+const REVERB_SECONDS = 2.5;
+// 響きの減衰の速さ (大きいほど早く小さくなる)
+const REVERB_DECAY = 3;
+
+// リバーブの響き方を表すインパルス応答を生成する
+// (ランダムなノイズを時間とともに小さくすることで、部屋の残響を簡易的に再現する)
+function createReverbImpulse(ctx) {
+  const length = Math.floor(ctx.sampleRate * REVERB_SECONDS);
+  const impulse = ctx.createBuffer(2, length, ctx.sampleRate); // 左右で別のノイズにして広がりを出す
+  for (let ch = 0; ch < 2; ch++) {
+    const data = impulse.getChannelData(ch);
+    for (let i = 0; i < length; i++) {
+      const t = i / length; // 0 (開始) → 1 (終了)
+      data[i] = (Math.random() * 2 - 1) * (1 - t) ** REVERB_DECAY;
+    }
+  }
+  return impulse;
+}
+
+// リバーブスライダーの値 (0～100) を原音と響きの割合に反映する
+function applyReverb() {
+  const ratio = Number(reverbBar.value) / 100;
+  reverbValue.textContent = `${reverbBar.value}%`;
+  updateEffectsSummary();
+  if (!reverbDryGain) return; // AudioContext 生成前は表示のみ更新 (生成時に反映される)
+  // 等パワーで混ぜる (途中で全体の音量が下がって聞こえないようにするため)
+  reverbDryGain.gain.value = Math.cos(ratio * Math.PI / 2);
+  reverbWetGain.gain.value = Math.sin(ratio * Math.PI / 2);
+}
+
+// ===== オーディオビジュアライザー =====
+
+// 表示する棒の本数
+const VISUALIZER_BARS = 48;
+// 棒と棒の間隔 (CSSピクセル)
+const VISUALIZER_GAP = 2;
+// 周波数データの受け取り用配列 (AnalyserNode 生成後に確保する)
+let frequencyData = null;
+// 各棒が担当する周波数データの範囲 [開始, 終了) の一覧
+let barRanges = [];
+// 描画ループの requestAnimationFrame の id (停止中は null)
+let visualizerFrameId = null;
+
+// 棒ごとの周波数範囲を対数的に割り当てる
+// (人の耳は低音域の違いに敏感なので、低音ほど細かく、高音ほどまとめて表示する)
+function computeBarRanges(binCount) {
+  const ranges = [];
+  let prevEnd = 1; // 0番目 (直流成分) は表示しない
+  for (let i = 1; i <= VISUALIZER_BARS; i++) {
+    // 1 ～ binCount を対数で等分した位置を棒の終端にする
+    const end = Math.max(prevEnd + 1, Math.round(binCount ** (i / VISUALIZER_BARS)));
+    ranges.push([prevEnd, Math.min(end, binCount)]);
+    prevEnd = end;
+  }
+  return ranges;
+}
+
+// キャンバスの解像度を表示サイズと画面の画素密度に合わせる (ぼやけ防止)
+function resizeVisualizer() {
+  const dpr = window.devicePixelRatio || 1;
+  visualizer.width = Math.round(visualizer.clientWidth * dpr);
+  visualizer.height = Math.round(visualizer.clientHeight * dpr);
+}
+
+// 1フレーム分の棒グラフを描画する
+function drawVisualizer() {
+  const ctx = visualizer.getContext('2d');
+  const { width, height } = visualizer;
+  ctx.clearRect(0, 0, width, height);
+  if (!analyserNode) return;
+
+  // 最新の周波数ごとの音の強さ (0～255) を取得する
+  analyserNode.getByteFrequencyData(frequencyData);
+
+  const dpr = window.devicePixelRatio || 1;
+  const gap = VISUALIZER_GAP * dpr;
+  const barWidth = (width - gap * (VISUALIZER_BARS - 1)) / VISUALIZER_BARS;
+  // 棒の色はテーマのアクセント色に合わせる (テーマ切替にも追従する)
+  ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+
+  barRanges.forEach(([start, end], i) => {
+    // 担当範囲の中で最も強い値を棒の高さにする
+    let peak = 0;
+    for (let j = start; j < end; j++) peak = Math.max(peak, frequencyData[j]);
+    // 無音でも細い線が見えるよう最低 1px は描く
+    const barHeight = Math.max((peak / 255) * height, dpr);
+    const x = i * (barWidth + gap);
+    ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+  });
+}
+
+// 表示 ON/OFF の状態を保存する localStorage のキー
+const VISUALIZER_STORAGE_KEY = 'musicPlayer.visualizer';
+// ビジュアライザーを表示するかどうか (保存なし・読み出し不可なら表示する)
+let visualizerEnabled = loadVisualizerEnabled();
+
+// 保存済みの表示 ON/OFF を読み出す
+function loadVisualizerEnabled() {
+  try {
+    return localStorage.getItem(VISUALIZER_STORAGE_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+
+// 表示 ON/OFF を画面 (キャンバスの表示とボタンの押下状態) に反映する
+function applyVisualizerEnabled() {
+  visualizer.hidden = !visualizerEnabled;
+  visualizerBtn.setAttribute('aria-pressed', String(visualizerEnabled));
+}
+
+// 表示 ON ⇔ OFF を切り替えて保存する
+function toggleVisualizer() {
+  visualizerEnabled = !visualizerEnabled;
+  applyVisualizerEnabled();
+  // ON にしたときに再生中なら描画を始め、OFF にしたら描画を止める (非表示中は無駄に描画しない)
+  if (visualizerEnabled && !audio.paused) startVisualizer();
+  else stopVisualizer();
+  try {
+    localStorage.setItem(VISUALIZER_STORAGE_KEY, visualizerEnabled ? 'on' : 'off');
+  } catch {
+    // 保存できない環境 (プライベートモード等) では今回の表示だけ切り替える
+  }
+}
+
+// 描画ループを開始する (再生開始時)
+function startVisualizer() {
+  // 非表示中・AnalyserNode 未生成・描画中のいずれかなら何もしない
+  if (!visualizerEnabled || !analyserNode || visualizerFrameId !== null) return;
+  // 初回のみ受け取り用配列と棒の割り当てを準備する
+  if (!frequencyData) {
+    frequencyData = new Uint8Array(analyserNode.frequencyBinCount);
+    barRanges = computeBarRanges(analyserNode.frequencyBinCount);
+  }
+  resizeVisualizer();
+  const loop = () => {
+    drawVisualizer();
+    visualizerFrameId = requestAnimationFrame(loop);
+  };
+  loop();
+}
+
+// 描画ループを止めて表示を消す (一時停止・停止時)
+function stopVisualizer() {
+  if (visualizerFrameId !== null) cancelAnimationFrame(visualizerFrameId);
+  visualizerFrameId = null;
+  visualizer.getContext('2d').clearRect(0, 0, visualizer.width, visualizer.height);
 }
 
 // 音量スライダーの値 (0～200) を実際の出力に反映する
@@ -74,6 +260,60 @@ function applyVolume() {
     audio.volume = Math.min(ratio, 1);
   }
 }
+
+// ===== 再生速度 =====
+
+// 設定できる速度の範囲 (倍)
+const SPEED_MIN = 0.5;
+const SPEED_MAX = 2;
+
+// 速度スライダーの値を audio要素に反映する
+function applySpeed() {
+  const rate = Number(speedBar.value);
+  speedValue.textContent = `${rate.toFixed(2)}x`;
+  updateEffectsSummary();
+  // 曲を切り替えると playbackRate は defaultPlaybackRate に戻されるため、両方に設定する
+  audio.defaultPlaybackRate = rate;
+  audio.playbackRate = rate;
+  // 速度を変えても音程 (声の高さ) は変えない
+  audio.preservesPitch = true;
+}
+
+// 再生速度を指定値 (倍) に設定する (範囲外は丸める)
+function setSpeed(rate) {
+  const clamped = Math.min(Math.max(rate, SPEED_MIN), SPEED_MAX);
+  // 小数の誤差 (1.2000000002 など) を避けるため、0.05 単位に丸める
+  speedBar.value = Math.round(clamped * 20) / 20;
+  applySpeed();
+}
+
+// ===== リバーブ・速度の開閉欄 =====
+
+// 開閉状態を保存する localStorage のキー
+const EFFECTS_OPEN_STORAGE_KEY = 'musicPlayer.effectsOpen';
+
+// 見出し横に現在のリバーブと速度を表示する (閉じていても設定がわかるように)
+function updateEffectsSummary() {
+  effectsSummary.textContent = `(リバーブ ${reverbBar.value}% / 速度 ${Number(speedBar.value).toFixed(2)}x)`;
+}
+
+// 保存済みの開閉状態を反映する (保存なし・読み出し不可なら閉じた状態)
+function restoreEffectsOpen() {
+  try {
+    effectsPanel.open = localStorage.getItem(EFFECTS_OPEN_STORAGE_KEY) === 'open';
+  } catch {
+    effectsPanel.open = false;
+  }
+}
+
+// 開閉されたら状態を保存する
+effectsPanel.addEventListener('toggle', () => {
+  try {
+    localStorage.setItem(EFFECTS_OPEN_STORAGE_KEY, effectsPanel.open ? 'open' : 'closed');
+  } catch {
+    // 保存できない環境 (プライベートモード等) では今回の表示だけ切り替える
+  }
+});
 
 // ===== ユーティリティ =====
 
@@ -377,8 +617,9 @@ audio.addEventListener('timeupdate', () => {
 });
 
 // 再生/一時停止の状態が変わったらボタン表示と再生リストを更新する
-audio.addEventListener('play', () => { updateControls(); renderPlaylist(); });
-audio.addEventListener('pause', () => { updateControls(); renderPlaylist(); });
+// あわせてビジュアライザーの描画ループを開始/停止する
+audio.addEventListener('play', () => { updateControls(); renderPlaylist(); startVisualizer(); });
+audio.addEventListener('pause', () => { updateControls(); renderPlaylist(); stopVisualizer(); });
 
 // 曲が終わったら次の曲を自動再生する
 audio.addEventListener('ended', () => {
@@ -411,6 +652,16 @@ seekBar.addEventListener('change', () => {
 
 // 音量スライダーの変更を反映する
 volumeBar.addEventListener('input', applyVolume);
+
+// リバーブスライダーの変更を反映する
+reverbBar.addEventListener('input', applyReverb);
+
+// 再生速度スライダーの変更を反映する (ダブルクリックで等速に戻す)
+speedBar.addEventListener('input', applySpeed);
+speedBar.addEventListener('dblclick', () => setSpeed(1));
+
+// ビジュアライザー表示の ON/OFF 切替ボタン
+visualizerBtn.addEventListener('click', toggleVisualizer);
 
 // 「ファイルを追加」ボタンでファイル選択ダイアログを開く
 addBtn.addEventListener('click', () => fileInput.click());
@@ -466,6 +717,8 @@ window.addEventListener('drop', (e) => e.preventDefault());
 const SEEK_STEP = 5;
 const SEEK_STEP_LARGE = 30;
 const VOLUME_STEP = 5;
+// ショートカットキーでの再生速度の変化量 (倍)
+const SPEED_STEP = 0.1;
 // ミュート解除時に戻す音量
 let volumeBeforeMute = 100;
 
@@ -509,10 +762,13 @@ const SHORTCUTS = {
   'arrowup': () => setVolume(Number(volumeBar.value) + VOLUME_STEP),
   'arrowdown': () => setVolume(Number(volumeBar.value) - VOLUME_STEP),
   'm': toggleMute,
+  ']': () => setSpeed(Number(speedBar.value) + SPEED_STEP),
+  '[': () => setSpeed(Number(speedBar.value) - SPEED_STEP),
   'o': () => fileInput.click(),
   'delete': removeCurrentTrack,
   'home': () => seekBy(-Infinity),
   't': toggleTheme, // テーマ切替 (theme.js で定義)
+  'v': toggleVisualizer,
 };
 
 // キー入力をショートカットとして処理すべきかどうかを判定する
@@ -542,7 +798,14 @@ document.addEventListener('keydown', (e) => {
   action(e);
 });
 
+// ウィンドウサイズが変わったらビジュアライザーの解像度を合わせ直す
+window.addEventListener('resize', resizeVisualizer);
+
 // ===== 初期化 =====
+applyVisualizerEnabled();
+applyReverb();
+applySpeed();
+restoreEffectsOpen();
 applyVolume();
 renderPlaylist();
 updateControls();
