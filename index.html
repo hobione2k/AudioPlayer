@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Music Player</title>
+  <link rel="stylesheet" href="./css/style.css">
+  <!-- 描画前にテーマを適用して画面のちらつきを防ぐため、head 内で読み込む -->
+  <script src="./js/theme.js"></script>
+</head>
+<body>
+  <main class="player">
+    <div class="player-header">
+      <h1>Music Player</h1>
+      <!-- テーマ切替トグルボタン (ライト ⇔ ダーク) -->
+      <button id="themeBtn" class="theme-toggle" title="テーマ切替 (T)" aria-pressed="false">☀</button>
+    </div>
+
+    <!-- 再生中の曲名表示 -->
+    <div id="nowPlaying" class="now-playing">曲が選択されていません</div>
+
+    <!-- 再生位置スライダーと再生時間 -->
+    <div class="seek">
+      <span id="currentTime" class="time">0:00</span>
+      <input id="seekBar" type="range" min="0" max="0" step="0.01" value="0" disabled>
+      <span id="duration" class="time">0:00</span>
+    </div>
+
+    <!-- 再生操作ボタン -->
+    <div class="controls">
+      <button id="prevBtn" title="前の曲 (P)">⏮</button>
+      <button id="playBtn" class="play" title="再生 / 一時停止 (Space / K)">▶</button>
+      <button id="stopBtn" title="停止 (S)">⏹</button>
+      <button id="nextBtn" title="次の曲 (N)">⏭</button>
+    </div>
+
+    <!-- 音量スライダー (0～200%) -->
+    <div class="volume">
+      <label for="volumeBar">音量</label>
+      <input id="volumeBar" type="range" min="0" max="200" step="1" value="100">
+      <span id="volumeValue" class="volume-value">100%</span>
+    </div>
+
+    <!-- 再生リスト -->
+    <section class="playlist-section">
+      <div class="playlist-header">
+        <h2>再生リスト <span id="trackCount">(0)</span></h2>
+        <div class="playlist-actions">
+          <button id="addBtn" title="ファイルを追加 (O)">ファイルを追加</button>
+          <button id="clearBtn">すべて削除</button>
+        </div>
+        <input id="fileInput" type="file" multiple
+               accept=".wav,.mp3,.ogg,.flac,.m4a,audio/*" hidden>
+      </div>
+
+      <div id="dropZone" class="drop-zone">
+        <ol id="playlist" class="playlist"></ol>
+        <p id="emptyMessage" class="empty-message">
+          ここにオーディオファイル (wav / mp3 / ogg / flac / m4a) をドラッグ＆ドロップ
+        </p>
+      </div>
+    </section>
+
+    <!-- ショートカットキー一覧 (クリックで開閉) -->
+    <details class="shortcuts">
+      <summary>ショートカットキー</summary>
+      <dl>
+        <dt><kbd>Space</kbd> / <kbd>K</kbd></dt><dd>再生 / 一時停止</dd>
+        <dt><kbd>S</kbd></dt><dd>停止</dd>
+        <dt><kbd>N</kbd> / <kbd>P</kbd></dt><dd>次の曲 / 前の曲</dd>
+        <dt><kbd>→</kbd> / <kbd>←</kbd></dt><dd>5秒進む / 戻る</dd>
+        <dt><kbd>Shift</kbd> + <kbd>→</kbd> / <kbd>←</kbd></dt><dd>30秒進む / 戻る</dd>
+        <dt><kbd>Home</kbd></dt><dd>曲の先頭へ</dd>
+        <dt><kbd>↑</kbd> / <kbd>↓</kbd></dt><dd>音量 +5% / −5%</dd>
+        <dt><kbd>M</kbd></dt><dd>ミュート / 解除</dd>
+        <dt><kbd>O</kbd></dt><dd>ファイルを追加</dd>
+        <dt><kbd>T</kbd></dt><dd>テーマ切替 (ライト / ダーク)</dd>
+        <dt><kbd>Delete</kbd></dt><dd>選択中の曲を再生リストから削除</dd>
+      </dl>
+    </details>
+  </main>
+
+  <!-- 実際の再生を担うaudio要素 -->
+  <audio id="audio" preload="metadata"></audio>
+
+  <script src="./js/app.js"></script>
+</body>
+</html>

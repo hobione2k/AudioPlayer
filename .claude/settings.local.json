@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(node --check js/app.js)",
+      "PowerShell(node --check js/theme.js)"
+    ]
+  }
+}
