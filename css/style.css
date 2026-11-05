@@ -54,6 +54,13 @@ body {
 
 h1 { margin: 0; font-size: 1.3rem; }
 
+/* タイトル下の注記 (控えめな色・小さめの文字で表示) */
+.subtitle {
+  margin: 4px 0 0;
+  font-size: .8rem;
+  color: var(--muted);
+}
+
 /* タイトルとテーマ切替ボタンを横並びにする */
 .player-header {
   display: flex;
