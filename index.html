@@ -3,6 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!--
+    コンテンツセキュリティポリシー (CSP): ファイルが外部へ送信されないことをブラウザに保証させる
+    ・default-src 'self'  : 読み込みは自サイトのファイルのみ許可 (外部スクリプト・CSS等を禁止)
+    ・connect-src 'none'  : fetch / XHR / WebSocket / sendBeacon 等の通信をすべて禁止
+    ・media-src 'self' blob: : 音声はローカルファイルから作った blob: URL のみ再生を許可
+    ・form-action 'none'  : フォーム送信を禁止
+    ・object-src 'none' / base-uri 'none' : プラグイン埋め込みと基準URLの書き換えを禁止
+  -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; connect-src 'none'; media-src 'self' blob:; form-action 'none'; object-src 'none'; base-uri 'none'">
   <title>Audio Player</title>
   <link rel="stylesheet" href="./css/style.css">
   <!-- 描画前にテーマを適用して画面のちらつきを防ぐため、head 内で読み込む -->
