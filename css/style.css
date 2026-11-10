@@ -227,6 +227,19 @@ button:disabled { opacity: .4; cursor: default; }
 
 .playlist .index { color: var(--muted); min-width: 2em; text-align: right; font-variant-numeric: tabular-nums; }
 .playlist .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 再生中の曲名のループスクロール (スマホのみ。app.js ではみ出すときだけ marquee を付ける) */
+.playlist .name.marquee { text-overflow: clip; }
+.playlist .marquee-track {
+  display: inline-block;
+  animation: marquee linear infinite; /* 1周の時間は app.js で曲名の長さから設定する */
+}
+/* 曲名の後ろに間隔を空け、次の曲名と詰まって見えないようにする */
+.playlist .marquee-item { padding-right: 3em; }
+/* 曲名2つ分のうち1つ分 (=全体の半分) だけ左へ流し、先頭に戻してループさせる */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
 .playlist .track-time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .playlist .remove {
   border: none;

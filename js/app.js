@@ -544,7 +544,55 @@ function renderPlaylist() {
   // 件数表示と空メッセージの切り替え
   trackCount.textContent = `(${playlist.length})`;
   emptyMessage.hidden = playlist.length > 0;
+
+  // スマホでは再生中の曲名をループスクロールさせる
+  updatePlaylistMarquee();
 }
+
+// ===== 再生中の曲名のループスクロール (スマホのみ) =====
+
+// スマホ判定: タッチ操作主体 (ホバー不可・指で操作) かつ画面幅が狭い端末
+// (動きを減らす設定の端末ではスクロールさせない)
+const MARQUEE_MEDIA = window.matchMedia(
+  '(hover: none) and (pointer: coarse) and (max-width: 767px) and (prefers-reduced-motion: no-preference)'
+);
+// スクロールの速さ (CSSピクセル / 秒)
+const MARQUEE_SPEED = 40;
+
+// 再生中の行の曲名が欄に収まらない場合に、ループスクロール表示に切り替える
+function updatePlaylistMarquee() {
+  const nameEl = playlistEl.querySelector('li.active .name');
+  if (!nameEl) return;
+
+  // いったん通常表示 (末尾を … で省略) に戻す
+  const name = nameEl.title;
+  nameEl.classList.remove('marquee');
+  nameEl.textContent = name;
+
+  // スマホ以外・一時停止中・曲名が欄に収まっている場合はスクロールしない
+  if (!MARQUEE_MEDIA.matches || audio.paused) return;
+  if (nameEl.scrollWidth <= nameEl.clientWidth) return;
+
+  // 同じ曲名を2つ並べ、ちょうど1つ分ずらしたところで先頭に戻すと継ぎ目なくループする
+  const track = document.createElement('span');
+  track.className = 'marquee-track';
+  const first = document.createElement('span');
+  first.className = 'marquee-item';
+  first.textContent = name;
+  const second = first.cloneNode(true);
+  second.setAttribute('aria-hidden', 'true'); // 読み上げで曲名が2回読まれないようにする
+  track.append(first, second);
+
+  nameEl.textContent = '';
+  nameEl.append(track);
+  nameEl.classList.add('marquee');
+
+  // 曲名の長さに関係なく一定の速さで流れるよう、1周の時間を幅から計算する
+  track.style.animationDuration = `${first.offsetWidth / MARQUEE_SPEED}s`;
+}
+
+// 画面の向き・幅が変わったら、はみ出すかどうかを判定し直す
+MARQUEE_MEDIA.addEventListener('change', updatePlaylistMarquee);
 
 // 並べ替え先の強調表示をすべて消す
 function clearDropTargets() {
@@ -844,6 +892,8 @@ document.addEventListener('keydown', (e) => {
 
 // ウィンドウサイズが変わったらビジュアライザーの解像度を合わせ直す
 window.addEventListener('resize', resizeVisualizer);
+// 再生中の曲名がはみ出すかどうかも判定し直す
+window.addEventListener('resize', updatePlaylistMarquee);
 
 // ===== 初期化 =====
 // 保存済みの音量・リバーブ・速度を先にスライダーへ戻し、続く apply 関数で反映する
