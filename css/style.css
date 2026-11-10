@@ -61,7 +61,7 @@ h1 { margin: 0; font-size: 1.3rem; }
   color: var(--muted);
 }
 
-/* タイトルとテーマ切替ボタンを横並びにする */
+/* タイトルとテーマ切替ボタンを横並びにし、ボタンを右端に寄せる */
 .player-header {
   display: flex;
   align-items: center;
@@ -69,20 +69,30 @@ h1 { margin: 0; font-size: 1.3rem; }
   gap: 8px;
   margin-bottom: 12px;
 }
-.theme-toggle { white-space: nowrap; }
-/* ヘッダー右側のボタン群 */
-.header-actions { display: flex; gap: 8px; }
+.theme-toggle { white-space: nowrap; flex-shrink: 0; }
+/* 曲名表示の右端に置くビジュアライザー切替ボタン (縮まないように固定) */
+.visualizer-toggle { flex-shrink: 0; }
 /* ビジュアライザー OFF のときはボタンを薄く表示する */
 .visualizer-toggle[aria-pressed="false"] { opacity: .45; }
 h2 { margin: 0; font-size: 1rem; }
 
-/* 再生中の曲名 */
+/* 再生中の曲名とボタン群を横並びにし、ボタンを右端に寄せる */
+.now-playing-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* 再生中の曲名 (長い場合は省略表示。min-width: 0 で flex 内でも縮められるようにする) */
 .now-playing {
+  flex: 1;
+  min-width: 0;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-bottom: 12px;
 }
 
 /* ===== オーディオビジュアライザー ===== */

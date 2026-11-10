@@ -26,16 +26,16 @@
         <h1>Audio Player</h1>
         <p class="subtitle">ブラウザ上で動作します(ファイルは外部に送信されません)</p>
       </div>
-      <div class="header-actions">
-        <!-- ビジュアライザー表示の ON/OFF 切替ボタン -->
-        <button id="visualizerBtn" class="visualizer-toggle" title="ビジュアライザー表示切替 (V)" aria-pressed="true">📊</button>
-        <!-- テーマ切替トグルボタン (ライト ⇔ ダーク) -->
-        <button id="themeBtn" class="theme-toggle" title="テーマ切替 (T)" aria-pressed="false">☀</button>
-      </div>
+      <!-- テーマ切替トグルボタン (ライト ⇔ ダーク)。タイトルの右端に表示する -->
+      <button id="themeBtn" class="theme-toggle" title="テーマ切替 (T)" aria-pressed="false">☀</button>
     </div>
 
-    <!-- 再生中の曲名表示 -->
-    <div id="nowPlaying" class="now-playing">曲が選択されていません</div>
+    <!-- 再生中の曲名表示と、その右端に置くビジュアライザー切替ボタン -->
+    <div class="now-playing-row">
+      <div id="nowPlaying" class="now-playing">曲が選択されていません</div>
+      <!-- ビジュアライザー表示の ON/OFF 切替ボタン -->
+      <button id="visualizerBtn" class="visualizer-toggle" title="ビジュアライザー表示切替 (V)" aria-pressed="true">📊</button>
+    </div>
 
     <!-- オーディオビジュアライザー (再生中の音の周波数分布を棒グラフで表示) -->
     <canvas id="visualizer" class="visualizer" aria-hidden="true"></canvas>
@@ -88,8 +88,8 @@
       <div class="playlist-header">
         <h2>再生リスト <span id="trackCount">(0)</span></h2>
         <div class="playlist-actions">
-          <button id="addBtn" title="ファイルを追加 (O)">ファイルを追加</button>
-          <button id="clearBtn">すべて削除</button>
+          <button id="addBtn" title="ファイルを追加 (O)">追加</button>
+          <button id="clearBtn">全削除</button>
         </div>
         <input id="fileInput" type="file" multiple
                accept=".wav,.mp3,.ogg,.flac,.m4a,audio/*" hidden>
