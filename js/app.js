@@ -122,6 +122,8 @@ function applyReverb() {
   const ratio = Number(reverbBar.value) / 100;
   reverbValue.textContent = `${reverbBar.value}%`;
   updateEffectsSummary();
+  // 次回起動時に復元できるよう保存する (スライダー操作以外での変更も含めて保存される)
+  saveSetting(REVERB_STORAGE_KEY, reverbBar.value);
   if (!reverbDryGain) return; // AudioContext 生成前は表示のみ更新 (生成時に反映される)
   // 等パワーで混ぜる (途中で全体の音量が下がって聞こえないようにするため)
   reverbDryGain.gain.value = Math.cos(ratio * Math.PI / 2);
@@ -251,6 +253,8 @@ function stopVisualizer() {
 function applyVolume() {
   const ratio = Number(volumeBar.value) / 100;
   volumeValue.textContent = `${volumeBar.value}%`;
+  // 次回起動時に復元できるよう保存する (ショートカットキー・ミュートでの変更も含む)
+  saveSetting(VOLUME_STORAGE_KEY, volumeBar.value);
   if (gainNode) {
     // GainNode があれば増幅率で制御し、audio要素側は等倍に固定
     audio.volume = 1;
@@ -272,6 +276,8 @@ function applySpeed() {
   const rate = Number(speedBar.value);
   speedValue.textContent = `${rate.toFixed(2)}x`;
   updateEffectsSummary();
+  // 次回起動時に復元できるよう保存する (ショートカットキー・ダブルクリックでの変更も含む)
+  saveSetting(SPEED_STORAGE_KEY, speedBar.value);
   // 曲を切り替えると playbackRate は defaultPlaybackRate に戻されるため、両方に設定する
   audio.defaultPlaybackRate = rate;
   audio.playbackRate = rate;
@@ -314,6 +320,44 @@ effectsPanel.addEventListener('toggle', () => {
     // 保存できない環境 (プライベートモード等) では今回の表示だけ切り替える
   }
 });
+
+// ===== 音量・リバーブ・速度の保存 =====
+
+// 各スライダーの値を保存する localStorage のキー
+const VOLUME_STORAGE_KEY = 'musicPlayer.volume';
+const REVERB_STORAGE_KEY = 'musicPlayer.reverb';
+const SPEED_STORAGE_KEY = 'musicPlayer.speed';
+
+// 設定値を保存する (保存できない環境では何もしない)
+function saveSetting(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // 保存できない環境 (プライベートモード等) では今回の設定だけ反映する
+  }
+}
+
+// 保存済みの値をスライダーに戻す (保存なし・不正な値・読み出し不可なら初期値のまま)
+function restoreSlider(input, key) {
+  let saved = null;
+  try {
+    saved = localStorage.getItem(key);
+  } catch {
+    return;
+  }
+  if (saved === null) return;
+  const value = Number(saved);
+  if (!Number.isFinite(value)) return;
+  // スライダーの範囲外の値は範囲内に丸めてから設定する
+  input.value = Math.min(Math.max(value, Number(input.min)), Number(input.max));
+}
+
+// 保存済みの音量・リバーブ・速度をスライダーに戻す (反映は各 apply 関数で行う)
+function restoreAudioSettings() {
+  restoreSlider(volumeBar, VOLUME_STORAGE_KEY);
+  restoreSlider(reverbBar, REVERB_STORAGE_KEY);
+  restoreSlider(speedBar, SPEED_STORAGE_KEY);
+}
 
 // ===== ユーティリティ =====
 
@@ -802,6 +846,8 @@ document.addEventListener('keydown', (e) => {
 window.addEventListener('resize', resizeVisualizer);
 
 // ===== 初期化 =====
+// 保存済みの音量・リバーブ・速度を先にスライダーへ戻し、続く apply 関数で反映する
+restoreAudioSettings();
 applyVisualizerEnabled();
 applyReverb();
 applySpeed();
